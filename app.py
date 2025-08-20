@@ -4,6 +4,7 @@ import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics.pairwise import cosine_similarity
 import matplotlib.pyplot as plt
+import upsetplot
 
 # -----------------------------
 # Simulated data
@@ -46,6 +47,66 @@ def minmax_scale(x: np.ndarray) -> np.ndarray:
     if rng <= 1e-12:
         return np.zeros_like(x)
     return (x - mn) / (rng + 1e-12)
+
+
+def create_customer_features(selected_customers_df):
+    """
+    Create customer features based on their purchase patterns for UpSet plot
+    """
+    # Get customer indices from CustomerID
+    customer_indices = []
+    for cust_id in selected_customers_df['CustomerID']:
+        idx = int(cust_id.split('_')[1])
+        customer_indices.append(idx)
+    
+    # Get purchase data for selected customers
+    selected_purchases = customer_article_matrix.iloc[customer_indices]
+    
+    # Create feature categories based on article features and purchase patterns
+    customer_features = pd.DataFrame(index=selected_customers_df.index)
+    
+    # Feature 1: High Activity (purchased more than median number of articles)
+    total_purchases = selected_purchases.sum(axis=1)
+    median_purchases = total_purchases.median()
+    if pd.isna(median_purchases):
+        median_purchases = 0
+    customer_features['High Activity'] = (total_purchases > median_purchases).fillna(False)
+    
+    # Feature 2: Gold Buyer (purchased at least one gold article)
+    gold_articles = article_features[article_features['Gold'] == 1]['Article'].tolist()
+    gold_columns = [col for col in selected_purchases.columns if col in gold_articles]
+    if gold_columns:
+        customer_features['Gold Buyer'] = (selected_purchases[gold_columns].sum(axis=1) > 0).fillna(False)
+    else:
+        customer_features['Gold Buyer'] = False
+    
+    # Feature 3: Silver Buyer (purchased at least one silver article)  
+    silver_articles = article_features[article_features['Silver'] == 1]['Article'].tolist()
+    silver_columns = [col for col in selected_purchases.columns if col in silver_articles]
+    if silver_columns:
+        customer_features['Silver Buyer'] = (selected_purchases[silver_columns].sum(axis=1) > 0).fillna(False)
+    else:
+        customer_features['Silver Buyer'] = False
+    
+    # Feature 4: Heritage Buyer (purchased at least one heritage article)
+    heritage_articles = article_features[article_features['Heritage'] == 1]['Article'].tolist()
+    heritage_columns = [col for col in selected_purchases.columns if col in heritage_articles]
+    if heritage_columns:
+        customer_features['Heritage Buyer'] = (selected_purchases[heritage_columns].sum(axis=1) > 0).fillna(False)
+    else:
+        customer_features['Heritage Buyer'] = False
+    
+    # Feature 5: High Propensity (score above 75th percentile)
+    score_75th = selected_customers_df['Score'].quantile(0.75)
+    if pd.isna(score_75th):
+        score_75th = selected_customers_df['Score'].median()
+    customer_features['High Propensity'] = (selected_customers_df['Score'] > score_75th).fillna(False)
+    
+    # Ensure all columns are boolean and no NaN values
+    for col in customer_features.columns:
+        customer_features[col] = customer_features[col].astype(bool).fillna(False)
+    
+    return customer_features
 
 
 def score_and_sort(article_number: str):
@@ -261,12 +322,129 @@ if st.session_state.df_sorted is not None:
     ax2.legend()
     st.pyplot(fig2)
 
+    # UpSet Plot - Customer Feature Analysis
+    st.subheader("Customer Feature Analysis - UpSet Plot")
+    
+    if len(selected_customers) > 0:
+        try:
+            # Create customer features
+            customer_features = create_customer_features(selected_customers)
+            
+            # Ensure we have at least one feature with True values
+            feature_counts = customer_features.sum()
+            valid_features = feature_counts[feature_counts > 0]
+            
+            if len(valid_features) == 0:
+                st.warning("No customers have any of the analyzed features. Try selecting more customers or adjusting the ROI threshold.")
+            else:
+                # Filter to only include features that have at least one True value
+                customer_features_filtered = customer_features[valid_features.index]
+                
+                # Convert to the format needed for upsetplot
+                # Create membership lists for each customer
+                memberships = []
+                for i in range(len(customer_features_filtered)):
+                    customer_row = customer_features_filtered.iloc[i]
+                    member_features = customer_row[customer_row == True].index.tolist()
+                    memberships.append(member_features)
+                
+                # Handle case where some customers have no features
+                if all(len(m) == 0 for m in memberships):
+                    st.warning("All selected customers have no features. This might indicate an issue with the feature calculation.")
+                else:
+                    # Create upset data with proper error handling
+                    upset_data = upsetplot.from_memberships(
+                        memberships,
+                        data=selected_customers['Score'].values
+                    )
+                    
+                    if len(upset_data) > 0:
+                        # Create the UpSet plot
+                        fig3 = plt.figure(figsize=(12, 8))
+                        
+                        # Plot the UpSet plot with subset sizes and aggregated scores
+                        upset_plot = upsetplot.UpSet(upset_data, subset_size='count', show_counts=True)
+                        upset_plot.plot(fig=fig3)
+                        
+                        plt.suptitle(f"Feature Intersections Among Selected Customers (n={len(selected_customers)})", 
+                                    fontsize=14, y=0.98)
+                        
+                        st.pyplot(fig3)
+                        
+                        # Show feature summary statistics
+                        st.subheader("Feature Summary")
+                        feature_summary = pd.DataFrame({
+                            'Feature': customer_features_filtered.columns,
+                            'Count': customer_features_filtered.sum(),
+                            'Percentage': (customer_features_filtered.sum() / len(customer_features_filtered) * 100).round(1)
+                        })
+                        feature_summary = feature_summary.sort_values('Count', ascending=False)
+                        
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.dataframe(feature_summary, hide_index=True)
+                        
+                        with col2:
+                            # Show intersection details
+                            st.write("**Top Intersections:**")
+                            intersection_sizes = upset_data.groupby(level=list(range(upset_data.index.nlevels))).size()
+                            top_intersections = intersection_sizes.sort_values(ascending=False).head(5)
+                            
+                            intersection_count = 0
+                            for idx, size in top_intersections.items():
+                                if intersection_count >= 5:
+                                    break
+                                features = [customer_features_filtered.columns[i] for i, val in enumerate(idx) if val]
+                                if len(features) > 0:
+                                    st.write(f"• {' ∩ '.join(features)}: {size} customers")
+                                else:
+                                    st.write(f"• No features: {size} customers")
+                                intersection_count += 1
+                    else:
+                        st.warning("Unable to create UpSet plot: no valid intersections found.")
+            
+        except Exception as e:
+            st.error(f"Error creating UpSet plot: {str(e)}")
+            st.info("This might occur if there are too few customers selected or if the upsetplot library is not installed. To install: `pip install upsetplot`")
+            
+            # Show debug information
+            with st.expander("Debug Information"):
+                st.write("Selected customers shape:", selected_customers.shape)
+                try:
+                    debug_features = create_customer_features(selected_customers)
+                    st.write("Customer features shape:", debug_features.shape)
+                    st.write("Customer features summary:")
+                    st.dataframe(debug_features.describe())
+                    st.write("Feature value counts:")
+                    for col in debug_features.columns:
+                        st.write(f"{col}: {debug_features[col].sum()} True, {(~debug_features[col]).sum()} False")
+                except Exception as debug_e:
+                    st.write("Error in feature creation:", str(debug_e))
+    
+    else:
+        st.info("No customers selected for UpSet plot analysis.")
+
     # Export
     st.subheader("Export Selected Customers")
-    st.dataframe(selected_customers)
-    csv = selected_customers.to_csv(index=False).encode('utf-8')
-    st.download_button("Download CSV", data=csv,
-                       file_name="selected_customers.csv", mime="text/csv")
+    
+    # Add feature information to export data
+    if len(selected_customers) > 0:
+        try:
+            customer_features = create_customer_features(selected_customers)
+            export_data = selected_customers.copy()
+            for col in customer_features.columns:
+                export_data[col] = customer_features[col].values
+            st.dataframe(export_data)
+            csv = export_data.to_csv(index=False).encode('utf-8')
+            st.download_button("Download CSV (with features)", data=csv,
+                             file_name="selected_customers_with_features.csv", mime="text/csv")
+        except:
+            st.dataframe(selected_customers)
+            csv = selected_customers.to_csv(index=False).encode('utf-8')
+            st.download_button("Download CSV", data=csv,
+                             file_name="selected_customers.csv", mime="text/csv")
+    else:
+        st.info("No data to export.")
 
 else:
     st.caption("Press **Score Customers** to compute scores and show dashboards.")
