@@ -135,7 +135,7 @@ if st.session_state.df_sorted is not None:
         return ks, total_costs, expected_revenues, rois, cum_conv
     
     # ROI Threshold Control (moved here before calculations)
-    roi_threshold = st.slider("ROI Threshold for Customer Selection", min_value=0.0, max_value=5.0, value=1.0, step=0.1,
+    roi_threshold = st.slider("ROI Threshold for Customer Selection", min_value=0.0, max_value=5.0, value=3.0, step=0.1,
                              help="Automatically selects customers up to the point where ROI falls below this threshold")
     
     # Calculate current ROI metrics
