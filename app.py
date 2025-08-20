@@ -135,7 +135,7 @@ if st.session_state.df_sorted is not None:
         return ks, total_costs, expected_revenues, rois, cum_conv
     
     # ROI Threshold Control (moved here before calculations)
-    roi_threshold = st.slider("ROI Threshold for Customer Selection", min_value=0.0, max_value=5.0, value=3.0, step=0.1,
+    roi_threshold = st.slider("ROI Threshold for Customer Selection", min_value=0.0, max_value=5.0, value=1.0, step=0.1,
                              help="Automatically selects customers up to the point where ROI falls below this threshold")
     
     # Calculate current ROI metrics
@@ -170,22 +170,48 @@ if st.session_state.df_sorted is not None:
     total_cost = selection_size * cost_per_contact
     expected_conversion_total = cum_conv[selection_size - 1]  # Cumulative conversion up to k
     expected_revenue = expected_conversion_total * gross_margin
-    roi = (expected_revenue) / total_cost if total_cost > 0 else 0.0
+    roi = (expected_revenue - total_cost) / total_cost if total_cost > 0 else 0.0
 
     # Dashboard
     st.subheader("Dashboard")
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Channel", channel)
-    col2.metric("Total Cost (TOC)", f"{total_cost:.2f}")
-    col3.metric("Expected Revenue (ER)", f"{expected_revenue:.2f}")
+    col2.metric("Total Cost (CAD)", f"{total_cost:.2f}")
+    col3.metric("Expected Revenue (CAD)", f"{expected_revenue:.2f}")
     col4.metric("ROI", f"{roi:.2f}")
 
-    # Score distribution
+    # Score distribution with selection visualization
     fig1, ax1 = plt.subplots()
-    ax1.hist(df_sorted["Score"], bins=20, color='skyblue', edgecolor='black')
-    ax1.set_title("Customer Propensity Scores")
-    ax1.set_xlabel("Score")
+    
+    # Get all scores and selected scores
+    all_scores = df_sorted["Score"].values
+    selected_scores = selected_customers["Score"].values
+    
+    # Create histogram bins
+    bins = 20
+    hist_range = (all_scores.min(), all_scores.max())
+    
+    # Plot all customers (background)
+    ax1.hist(all_scores, bins=bins, range=hist_range, color='lightgray', 
+             edgecolor='black', alpha=0.7, label='All Customers')
+    
+    # Overlay selected customers
+    ax1.hist(selected_scores, bins=bins, range=hist_range, color='skyblue', 
+             edgecolor='navy', alpha=0.8, label=f'Selected Customers (n={len(selected_scores)})')
+    
+    ax1.set_title("Customer Propensity Scores - Selection Overview")
+    ax1.set_xlabel("Propensity Score")
     ax1.set_ylabel("Number of Customers")
+    ax1.legend()
+    ax1.grid(True, alpha=0.3)
+    
+    # Add selection threshold line (minimum score of selected customers)
+    if len(selected_scores) > 0:
+        min_selected_score = selected_scores.min()
+        ax1.axvline(min_selected_score, color='red', linestyle='--', alpha=0.7,
+                   label=f'Selection Threshold (Score ≥ {min_selected_score:.3f})')
+        ax1.legend()
+    
     st.pyplot(fig1)
 
     # ROI curve vs k
