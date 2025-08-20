@@ -170,7 +170,7 @@ if st.session_state.df_sorted is not None:
     total_cost = selection_size * cost_per_contact
     expected_conversion_total = cum_conv[selection_size - 1]  # Cumulative conversion up to k
     expected_revenue = expected_conversion_total * gross_margin
-    roi = (expected_revenue - total_cost) / total_cost if total_cost > 0 else 0.0
+    roi = (expected_revenue) / total_cost if total_cost > 0 else 0.0
 
     # Dashboard
     st.subheader("Dashboard")
