@@ -91,7 +91,7 @@ channel = st.selectbox("Select Promotion Channel", [
 cost_per_contact = st.number_input(
     "Cost per Contact (CAD)", min_value=0.0, value=1.0)
 gross_margin = st.number_input(
-    "Gross Margin of Product (CAD)", min_value=0.0, value=10.0)
+    "Gross Margin of Product (EPS)", min_value=0.0, value=7.0)
 
 # --- Initialize session state containers ---
 if "df_sorted" not in st.session_state:
@@ -135,7 +135,7 @@ if st.session_state.df_sorted is not None:
         return ks, total_costs, expected_revenues, rois, cum_conv
     
     # ROI Threshold Control (moved here before calculations)
-    roi_threshold = st.slider("ROI Threshold for Customer Selection", min_value=0.0, max_value=5.0, value=1.0, step=0.1,
+    roi_threshold = st.slider("ROI Threshold for Customer Selection", min_value=0.0, max_value=5.0, value=3.0, step=0.1,
                              help="Automatically selects customers up to the point where ROI falls below this threshold")
     
     # Calculate current ROI metrics
@@ -176,8 +176,8 @@ if st.session_state.df_sorted is not None:
     st.subheader("Dashboard")
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Channel", channel)
-    col2.metric("Total Cost (CAD)", f"{total_cost:.2f}")
-    col3.metric("Expected Revenue (CAD)", f"{expected_revenue:.2f}")
+    col2.metric("Total Cost (TOC)", f"{total_cost:.2f}")
+    col3.metric("Expected Revenue (ER)", f"{expected_revenue:.2f}")
     col4.metric("ROI", f"{roi:.2f}")
 
     # Score distribution
