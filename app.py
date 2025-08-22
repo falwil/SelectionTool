@@ -18,7 +18,7 @@ except ImportError:
 # Simulated data
 # ------------------------------
 np.random.seed(42)
-num_customers = 100
+num_customers = 1000
 num_articles = 20
 
 # Simulate article prices
@@ -211,7 +211,7 @@ article_number = st.selectbox(
 excluded_articles = st.multiselect(
     "Exclude customers who already bought ANY of these articles",
     options=aarticle_features["Article"].tolist(),
-    default=[],
+    default=[article_number],
     help="Customers who previously bought any selected articles will be removed from the eligible pool."
 )
 
