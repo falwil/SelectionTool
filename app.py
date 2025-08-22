@@ -163,6 +163,12 @@ def score_and_sort(article_number: str, excluded_articles: list):
     # Combine exclusions
     combined_exclude = already_purchased_selected | purchased_any_excluded
 
+    # NEW: Exclude customers from uploaded list
+    if excluded_customer_ids:
+        exclude_uploaded = customer_data["CustomerID"].isin(excluded_customer_ids)
+        combined_exclude |= exclude_uploaded
+
+
     # Store exclusion info in session state for display
     st.session_state.total_customers = len(customer_data)
     st.session_state.excluded_selected_article = int(already_purchased_selected.sum())
@@ -201,6 +207,27 @@ def score_and_sort(article_number: str, excluded_articles: list):
 # UI
 # ------------------------------
 st.title("Customer Selection Tool for Marketing Campaigns")
+
+# File uploader for customer exclusion list
+uploaded_exclusion_file = st.sidebar.file_uploader(
+    "Upload Customer Exclusion List (CSV with 'CustomerID' column)",
+    type=["csv"],
+    help="Upload a CSV file containing CustomerIDs to exclude from scoring."
+)
+
+# Read exclusion list if uploaded
+excluded_customer_ids = []
+if uploaded_exclusion_file is not None:
+    try:
+        exclusion_df = pd.read_csv(uploaded_exclusion_file)
+        if "CustomerID" in exclusion_df.columns:
+            excluded_customer_ids = exclusion_df["CustomerID"].dropna().astype(str).tolist()
+            st.sidebar.success(f"Loaded {len(excluded_customer_ids)} customers to exclude.")
+        else:
+            st.sidebar.error("CSV must contain a 'CustomerID' column.")
+    except Exception as e:
+        st.sidebar.error(f"Error reading file: {str(e)}")
+
 
 # Select article and exclusions
 article_number = st.selectbox(
