@@ -20,11 +20,19 @@ np.random.seed(42)
 num_customers = 100
 num_articles = 20
 
-# Simulate customer purchase history matrix
+
+# Simulate article prices
+article_prices = pd.Series(
+    np.random.uniform(10, 100, size=num_articles),
+    index=[f"Article_{i}" for i in range(num_articles)]
+)
+
+# Simulate customer purchase amounts (0 to 4)
 customer_article_matrix = pd.DataFrame(
-    np.random.randint(0, 2, size=(num_customers, num_articles)),
+    np.random.randint(0, 5, size=(num_customers, num_articles)),
     columns=[f"Article_{i}" for i in range(num_articles)]
 )
+
 
 # Simulate article features
 article_features = pd.DataFrame({
@@ -297,6 +305,15 @@ if st.session_state.df_sorted is not None:
     roi = (expected_revenue - total_cost) / total_cost if total_cost > 0 else 0.0
 
     # Dashboard
+
+# Compute total purchase value per selected customer
+if 'selected_customers' in locals() and selected_customers is not None:
+    selected_indices = [int(cid.split('_')[1]) for cid in selected_customers['CustomerID']]
+    selected_purchases = customer_article_matrix.iloc[selected_indices]
+    total_purchase_values = selected_purchases.dot(article_prices)
+
+    
+
     st.subheader("Dashboard")
     col1, col2, col3, col4, col5 = st.columns(5)
     col1.metric("Channel", channel)
@@ -458,6 +475,16 @@ if st.session_state.df_sorted is not None:
     
     else:
         st.info("No customers selected for feature analysis.")
+
+    # Plot histogram
+    fig_hist, ax_hist = plt.subplots(figsize=(10, 6))
+    ax_hist.hist(total_purchase_values, bins=20, color='orange', edgecolor='black')
+    ax_hist.set_title("Distribution of Total Purchase Value for Selected Customers")
+    ax_hist.set_xlabel("Total Purchase Value (CAD)")
+    ax_hist.set_ylabel("Number of Customers")
+    ax_hist.grid(True)
+    st.pyplot(fig_hist)
+
 
     # Export
     st.subheader("Export Selected Customers")
